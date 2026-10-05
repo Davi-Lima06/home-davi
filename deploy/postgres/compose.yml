@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: home-davi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: home_davi
+      POSTGRES_USER: home_davi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configure POSTGRES_PASSWORD no arquivo .env}
+    volumes:
+      - home_davi_postgres_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Permite apenas túnel SSH; não expõe PostgreSQL à LAN ou internet.
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - home-davi-internal
+
+volumes:
+  home_davi_postgres_data:
+    name: home_davi_postgres_data
+
+networks:
+  home-davi-internal:
+    name: home-davi-internal
+    driver: bridge
