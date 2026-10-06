@@ -57,7 +57,8 @@ security:
     # Só ligue se houver um proxy reverso confiável à frente; X-Forwarded-For é falsificável.
     trust-forwarded-for: ${IP_ALLOWLIST_TRUST_XFF:false}
     # IPs/CIDRs separados por vírgula; definidos no .env (IP_ALLOWLIST_ENTRIES). CIDR ex.: 192.168.2.0/24
-    entries: ${IP_ALLOWLIST_ENTRIES:52.67.145.81,192.168.2.165,192.168.2.185}
+    # O cloudflared instalado no host chega ao container pelo gateway da bridge Docker.
+    entries: ${IP_ALLOWLIST_ENTRIES:52.67.145.81,192.168.2.165,192.168.2.185,172.18.0.1}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     capacity: ${RATE_LIMIT_CAPACITY:100}   # requisições por IP por janela

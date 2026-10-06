@@ -30,13 +30,13 @@ class WebSecurityFiltersTests {
 
     private IpAllowlistFilter allowlist() {
         var properties = new IpAllowlistProperties();
-        properties.setEntries(List.of("52.67.145.81", "192.168.2.0/24"));
+        properties.setEntries(List.of("52.67.145.81", "192.168.2.0/24", "172.18.0.1"));
         return new IpAllowlistFilter(properties);
     }
 
     @Test
     void allowsConfiguredIpAndCidrAndLoopback() throws ServletException, IOException {
-        for (String ip : List.of("52.67.145.81", "192.168.2.50", "127.0.0.1")) {
+        for (String ip : List.of("52.67.145.81", "192.168.2.50", "127.0.0.1", "172.18.0.1")) {
             var chain = new MockFilterChain();
             var response = new MockHttpServletResponse();
             allowlist().doFilter(request(ip), response, chain);
@@ -108,8 +108,8 @@ class WebSecurityFiltersTests {
     @Test
     void bindsCommaSeparatedEntriesFromEnvIntoList() {
         var source = new MapConfigurationPropertySource(
-                Map.of("security.ip-allowlist.entries", "52.67.145.81,192.168.2.165,192.168.2.185"));
+                Map.of("security.ip-allowlist.entries", "52.67.145.81,192.168.2.165,192.168.2.185,172.18.0.1"));
         var properties = new Binder(source).bind("security.ip-allowlist", IpAllowlistProperties.class).get();
-        assertEquals(List.of("52.67.145.81", "192.168.2.165", "192.168.2.185"), properties.getEntries());
+        assertEquals(List.of("52.67.145.81", "192.168.2.165", "192.168.2.185", "172.18.0.1"), properties.getEntries());
     }
 }
