@@ -9,6 +9,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+
 /**
  * Boundary for Pluggy events. Translation to financial commands belongs here, never in the domain.
  */
@@ -29,7 +32,15 @@ public class PluggyWebhookController {
 
   @PostMapping
   @ResponseStatus(HttpStatus.ACCEPTED)
-  public void receive(@RequestBody JsonNode payload) {
+  public void receive(
+          @RequestHeader(name = "X-Webhook-Secret", required = false) String suppliedSecret,
+          @RequestBody JsonNode payload) {
+    if (suppliedSecret == null
+            || !MessageDigest.isEqual(
+            webhookSecret.getBytes(StandardCharsets.UTF_8),
+            suppliedSecret.getBytes(StandardCharsets.UTF_8))) {
+      throw new InvalidWebhookSecretException();
+    }
     receiveWebhook.receive(payload);
   }
 

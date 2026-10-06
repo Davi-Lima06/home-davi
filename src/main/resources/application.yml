@@ -50,3 +50,15 @@ hermes:
     secret: ${HERMES_WEBHOOK_SECRET:}
     poll-delay: ${HERMES_OUTBOX_POLL_DELAY:PT5S}
     batch-size: ${HERMES_OUTBOX_BATCH_SIZE:20}
+security:
+  # Allowlist de IPs válida para TODAS as requisições. O loopback (127.0.0.1/::1) é sempre liberado.
+  ip-allowlist:
+    enabled: ${IP_ALLOWLIST_ENABLED:true}
+    # Só ligue se houver um proxy reverso confiável à frente; X-Forwarded-For é falsificável.
+    trust-forwarded-for: ${IP_ALLOWLIST_TRUST_XFF:false}
+    # IPs/CIDRs separados por vírgula; definidos no .env (IP_ALLOWLIST_ENTRIES). CIDR ex.: 192.168.2.0/24
+    entries: ${IP_ALLOWLIST_ENTRIES:52.67.145.81,192.168.2.165,192.168.2.185}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    capacity: ${RATE_LIMIT_CAPACITY:100}   # requisições por IP por janela
+    window: ${RATE_LIMIT_WINDOW:PT1M}      # janela (ISO-8601); PT1M = 1 minuto
