@@ -1,11 +1,13 @@
 package br.com.davi.homedavi.finance.adapter.in.mcp;
 
 import br.com.davi.homedavi.finance.application.port.in.GetAccountBalanceUseCase;
+import br.com.davi.homedavi.finance.application.port.in.GetFinancialSnapshotUseCase;
 import br.com.davi.homedavi.finance.application.port.in.ListFinancialAccountsUseCase;
 import br.com.davi.homedavi.finance.application.port.in.ListFinancialTransactionsUseCase;
 import br.com.davi.homedavi.finance.domain.AccountBalance;
 import br.com.davi.homedavi.finance.domain.FinancialAccount;
 import br.com.davi.homedavi.finance.domain.FinancialTransaction;
+import br.com.davi.homedavi.finance.domain.FinancialSnapshot;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -25,14 +27,27 @@ public class FinanceMcpTools {
   private final ListFinancialTransactionsUseCase listTransactions;
   private final GetAccountBalanceUseCase getAccountBalance;
   private final ListFinancialAccountsUseCase listAccounts;
+  private final GetFinancialSnapshotUseCase getFinancialSnapshot;
 
   public FinanceMcpTools(
       ListFinancialTransactionsUseCase listTransactions,
       GetAccountBalanceUseCase getAccountBalance,
-      ListFinancialAccountsUseCase listAccounts) {
+      ListFinancialAccountsUseCase listAccounts,
+      GetFinancialSnapshotUseCase getFinancialSnapshot) {
     this.listTransactions = listTransactions;
     this.getAccountBalance = getAccountBalance;
     this.listAccounts = listAccounts;
+    this.getFinancialSnapshot = getFinancialSnapshot;
+  }
+
+  @Tool(
+      description =
+          "Retorna um snapshot financeiro consolidado em uma única chamada: status e horário da"
+              + " última sincronização, contas e saldos atuais, transações sincronizadas desde a"
+              + " última janela conhecida, transações pendentes e erros/limitações. Consulte esta"
+              + " ferramenta primeiro para avaliar se os dados estão completos e confiáveis.")
+  public FinancialSnapshot getFinancialSnapshot() {
+    return getFinancialSnapshot.getFinancialSnapshot();
   }
 
   @Tool(

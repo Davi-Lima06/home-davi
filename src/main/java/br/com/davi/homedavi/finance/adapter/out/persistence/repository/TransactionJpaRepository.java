@@ -7,4 +7,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface TransactionJpaRepository extends JpaRepository<TransactionEntity, UUID> {
   List<TransactionEntity> findByAccountIdOrderByOccurredAtDesc(UUID accountId);
+
+  List<TransactionEntity> findByUpdatedAtAfterAndUpdatedAtBeforeOrderByUpdatedAtAsc(
+      java.time.Instant after, java.time.Instant before);
+
+  List<TransactionEntity> findByUpdatedAtBeforeOrderByUpdatedAtAsc(java.time.Instant before);
+
+  List<TransactionEntity> findByPendingTrueOrderByOccurredAtDesc();
 }
