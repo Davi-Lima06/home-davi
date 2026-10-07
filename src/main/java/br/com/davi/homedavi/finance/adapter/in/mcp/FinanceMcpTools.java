@@ -44,8 +44,10 @@ public class FinanceMcpTools {
       description =
           "Retorna um snapshot financeiro consolidado em uma única chamada: status e horário da"
               + " última sincronização, contas e saldos atuais, transações sincronizadas desde a"
-              + " última janela conhecida, transações pendentes e erros/limitações. Consulte esta"
-              + " ferramenta primeiro para avaliar se os dados estão completos e confiáveis.")
+              + " última janela conhecida, transações pendentes, faturas de cartão em aberto,"
+              + " conexões bancárias (items) e seus estados, investimentos, empréstimos e"
+              + " erros/limitações. Consulte esta ferramenta primeiro para avaliar se os dados estão"
+              + " completos e confiáveis; use as tools específicas para aprofundar em um recurso.")
   public FinancialSnapshot getFinancialSnapshot() {
     return getFinancialSnapshot.getFinancialSnapshot();
   }

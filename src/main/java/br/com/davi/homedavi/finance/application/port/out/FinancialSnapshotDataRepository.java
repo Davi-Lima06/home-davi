@@ -4,9 +4,13 @@ import br.com.davi.homedavi.finance.domain.FinancialSnapshot;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /** Leituras locais necessárias para montar um snapshot coerente da última sincronização. */
 public interface FinancialSnapshotDataRepository {
+  /** itemIds já sincronizados no banco; fonte dos itens para investimentos e empréstimos. */
+  List<UUID> findActiveItemIds();
+
   Optional<SyncInfo> findLatestSync();
 
   Optional<SyncInfo> findLatestSuccessfulSync();

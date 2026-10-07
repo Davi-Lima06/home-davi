@@ -12,7 +12,10 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class FinanceMcpConfiguration {
   @Bean
-  ToolCallbackProvider financeToolCallbackProvider(FinanceMcpTools financeMcpTools) {
-    return MethodToolCallbackProvider.builder().toolObjects(financeMcpTools).build();
+  ToolCallbackProvider financeToolCallbackProvider(
+      FinanceMcpTools financeMcpTools, PluggyQueryMcpTools pluggyQueryMcpTools) {
+    return MethodToolCallbackProvider.builder()
+        .toolObjects(financeMcpTools, pluggyQueryMcpTools)
+        .build();
   }
 }

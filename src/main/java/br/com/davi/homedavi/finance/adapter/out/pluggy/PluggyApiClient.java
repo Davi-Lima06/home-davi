@@ -1,13 +1,20 @@
 package br.com.davi.homedavi.finance.adapter.out.pluggy;
 
 import br.com.davi.homedavi.finance.application.port.out.FinancialDataProvider;
+import br.com.davi.homedavi.finance.application.port.out.FinancialQueryProvider;
 import br.com.davi.homedavi.finance.domain.SyncedAccount;
+import br.com.davi.homedavi.finance.domain.SyncedBill;
+import br.com.davi.homedavi.finance.domain.SyncedInvestment;
+import br.com.davi.homedavi.finance.domain.SyncedItem;
+import br.com.davi.homedavi.finance.domain.SyncedLoan;
 import br.com.davi.homedavi.finance.domain.SyncedTransaction;
+import br.com.davi.homedavi.finance.domain.TransactionPage;
 import br.com.davi.homedavi.finance.domain.TransactionType;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +30,7 @@ import org.springframework.web.util.UriBuilder;
 
 /** Traduz a API REST do Pluggy (https://docs.pluggy.ai) para o modelo do domínio. */
 @Component
-public class PluggyApiClient implements FinancialDataProvider {
+public class PluggyApiClient implements FinancialDataProvider, FinancialQueryProvider {
   private static final Logger log = LoggerFactory.getLogger(PluggyApiClient.class);
 
   // A apiKey do Pluggy expira em 2h; renova com folga.
@@ -67,6 +74,79 @@ public class PluggyApiClient implements FinancialDataProvider {
             })
         .stream()
         .map(PluggyApiClient::toTransaction)
+        .toList();
+  }
+
+  // --- FinancialQueryProvider: leituras ao vivo para as tools MCP ---
+
+  @Override
+  public List<SyncedAccount> fetchAccounts(UUID itemId) {
+    return fetchAllPages(uri -> uri.path("/accounts").queryParam("itemId", itemId)).stream()
+        .map(PluggyApiClient::toAccount)
+        .toList();
+  }
+
+  @Override
+  public TransactionPage fetchTransactionsPage(UUID accountId, String cursor, int pageSize) {
+    JsonNode body =
+        restClient
+            .get()
+            .uri(
+                uri -> {
+                  uri.path("/v2/transactions")
+                      .queryParam("accountId", accountId)
+                      .queryParam("pageSize", pageSize);
+                  return cursor == null || cursor.isBlank()
+                      ? uri.build()
+                      : uri.queryParam("cursor", cursor).build();
+                })
+            .header("X-API-KEY", apiKey())
+            .retrieve()
+            .body(JsonNode.class);
+    if (body == null) throw new IllegalStateException("Pluggy returned an empty body for /v2/transactions");
+    // v2 usa paginação por cursor; aceita results/data e nextCursor na raiz ou em page.
+    JsonNode results = body.has("results") ? body.path("results") : body.path("data");
+    var transactions = new ArrayList<SyncedTransaction>();
+    results.forEach(node -> transactions.add(toTransaction(node)));
+    String nextCursor = text(body, "nextCursor");
+    if (nextCursor == null) nextCursor = text(body.path("page"), "nextCursor");
+    log.debug(
+        "Pluggy v2 transactions page: accountId={}, count={}, nextCursor={}",
+        accountId,
+        transactions.size(),
+        nextCursor != null);
+    return new TransactionPage(transactions, nextCursor);
+  }
+
+  @Override
+  public List<SyncedBill> fetchBills(UUID accountId) {
+    return fetchAllPages(uri -> uri.path("/bills").queryParam("accountId", accountId)).stream()
+        .map(node -> toBill(accountId, node))
+        .toList();
+  }
+
+  @Override
+  public List<SyncedItem> fetchItems() {
+    // /v2/items é v2 (cursor), não aceita o parâmetro `page` do fetchAllPages; busca direta.
+    JsonNode body = get("/v2/items");
+    JsonNode results =
+        body.has("results") ? body.path("results") : body.has("data") ? body.path("data") : body;
+    var items = new ArrayList<SyncedItem>();
+    results.forEach(node -> items.add(toItem(node)));
+    return items;
+  }
+
+  @Override
+  public List<SyncedInvestment> fetchInvestments(UUID itemId) {
+    return fetchAllPages(uri -> uri.path("/investments").queryParam("itemId", itemId)).stream()
+        .map(PluggyApiClient::toInvestment)
+        .toList();
+  }
+
+  @Override
+  public List<SyncedLoan> fetchLoans(UUID itemId) {
+    return fetchAllPages(uri -> uri.path("/loans").queryParam("itemId", itemId)).stream()
+        .map(PluggyApiClient::toLoan)
         .toList();
   }
 
@@ -162,6 +242,53 @@ public class PluggyApiClient implements FinancialDataProvider {
         OffsetDateTime.parse(node.get("date").asText()).toInstant(),
         "PENDING".equals(status),
         node.toString());
+  }
+
+  private static SyncedBill toBill(UUID accountId, JsonNode node) {
+    return new SyncedBill(
+        UUID.fromString(node.get("id").asText()),
+        accountId,
+        date(node, "dueDate"),
+        decimal(node, "totalAmount"),
+        decimal(node, "minimumPayment"),
+        text(node, "totalAmountCurrencyCode"),
+        node.toString());
+  }
+
+  private static SyncedItem toItem(JsonNode node) {
+    String updated = text(node, "lastUpdatedAt");
+    return new SyncedItem(
+        UUID.fromString(node.get("id").asText()),
+        text(node.path("connector"), "name"),
+        text(node, "status"),
+        text(node, "executionStatus"),
+        updated == null ? null : OffsetDateTime.parse(updated).toInstant(),
+        node.toString());
+  }
+
+  private static SyncedInvestment toInvestment(JsonNode node) {
+    return new SyncedInvestment(
+        UUID.fromString(node.get("id").asText()),
+        text(node, "name"),
+        text(node, "type"),
+        decimal(node, "balance"),
+        text(node, "currencyCode"),
+        node.toString());
+  }
+
+  private static SyncedLoan toLoan(JsonNode node) {
+    return new SyncedLoan(
+        UUID.fromString(node.get("id").asText()),
+        text(node, "contractNumber"),
+        decimal(node, "outstandingBalance"),
+        text(node, "currencyCode"),
+        node.toString());
+  }
+
+  private static LocalDate date(JsonNode node, String field) {
+    String value = text(node, field);
+    // Pluggy manda datas como YYYY-MM-DD ou ISO com horário; cobre os dois.
+    return value == null ? null : LocalDate.parse(value.substring(0, 10));
   }
 
   private static String text(JsonNode node, String field) {

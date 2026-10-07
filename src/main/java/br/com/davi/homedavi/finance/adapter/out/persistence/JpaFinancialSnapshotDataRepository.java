@@ -1,6 +1,7 @@
 package br.com.davi.homedavi.finance.adapter.out.persistence;
 
 import br.com.davi.homedavi.finance.adapter.out.persistence.entity.TransactionEntity;
+import br.com.davi.homedavi.finance.adapter.out.persistence.repository.AccountJpaRepository;
 import br.com.davi.homedavi.finance.adapter.out.persistence.repository.TransactionJpaRepository;
 import br.com.davi.homedavi.finance.adapter.out.persistence.repository.TransactionSyncLogJpaRepository;
 import br.com.davi.homedavi.finance.application.port.out.FinancialSnapshotDataRepository;
@@ -8,6 +9,7 @@ import br.com.davi.homedavi.finance.domain.FinancialSnapshot;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,11 +18,21 @@ import org.springframework.transaction.annotation.Transactional;
 public class JpaFinancialSnapshotDataRepository implements FinancialSnapshotDataRepository {
   private final TransactionSyncLogJpaRepository syncLogs;
   private final TransactionJpaRepository transactions;
+  private final AccountJpaRepository accounts;
 
   public JpaFinancialSnapshotDataRepository(
-      TransactionSyncLogJpaRepository syncLogs, TransactionJpaRepository transactions) {
+      TransactionSyncLogJpaRepository syncLogs,
+      TransactionJpaRepository transactions,
+      AccountJpaRepository accounts) {
     this.syncLogs = syncLogs;
     this.transactions = transactions;
+    this.accounts = accounts;
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<UUID> findActiveItemIds() {
+    return accounts.findDistinctItemIds();
   }
 
   @Override
