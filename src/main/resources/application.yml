@@ -51,6 +51,9 @@ hermes:
     poll-delay: ${HERMES_OUTBOX_POLL_DELAY:PT5S}
     batch-size: ${HERMES_OUTBOX_BATCH_SIZE:20}
 security:
+  mcp-auth:
+    # Sem token configurado, o endpoint MCP responde 503 (fail closed).
+    token: ${MCP_AUTH_TOKEN:}
   # Allowlist de IPs válida para TODAS as requisições. O loopback (127.0.0.1/::1) é sempre liberado.
   ip-allowlist:
     enabled: ${IP_ALLOWLIST_ENABLED:true}
@@ -58,7 +61,7 @@ security:
     trust-forwarded-for: ${IP_ALLOWLIST_TRUST_XFF:false}
     # IPs/CIDRs separados por vírgula; definidos no .env (IP_ALLOWLIST_ENTRIES). CIDR ex.: 192.168.2.0/24
     # O cloudflared instalado no host chega ao container pelo gateway da bridge Docker.
-    entries: ${IP_ALLOWLIST_ENTRIES:52.67.145.81,192.168.2.165,192.168.2.185,172.18.0.1}
+    entries: ${IP_ALLOWLIST_ENTRIES:52.67.145.81,192.168.2.165,192.168.2.185}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     capacity: ${RATE_LIMIT_CAPACITY:100}   # requisições por IP por janela
