@@ -1,19 +1,27 @@
 package br.com.davi.homedavi.finance.adapter.out.finance.persistence;
 
 import br.com.davi.homedavi.finance.adapter.out.finance.persistence.entity.AccountEntity;
+import br.com.davi.homedavi.finance.adapter.out.finance.persistence.entity.BillEntity;
 import br.com.davi.homedavi.finance.adapter.out.finance.persistence.entity.CategoryEntity;
 import br.com.davi.homedavi.finance.adapter.out.finance.persistence.entity.CategoryKind;
 import br.com.davi.homedavi.finance.adapter.out.finance.persistence.entity.FinanceTransactionType;
+import br.com.davi.homedavi.finance.adapter.out.finance.persistence.entity.LoanEntity;
 import br.com.davi.homedavi.finance.adapter.out.finance.persistence.entity.TransactionEntity;
 import br.com.davi.homedavi.finance.adapter.out.finance.persistence.repository.AccountJpaRepository;
+import br.com.davi.homedavi.finance.adapter.out.finance.persistence.repository.BillJpaRepository;
 import br.com.davi.homedavi.finance.adapter.out.finance.persistence.repository.CategoryJpaRepository;
+import br.com.davi.homedavi.finance.adapter.out.finance.persistence.repository.LoanJpaRepository;
 import br.com.davi.homedavi.finance.adapter.out.finance.persistence.repository.TransactionJpaRepository;
 import br.com.davi.homedavi.finance.application.port.out.finance.FinanceDataRepository;
 import br.com.davi.homedavi.finance.domain.integration.SyncedAccount;
+import br.com.davi.homedavi.finance.domain.integration.SyncedBill;
+import br.com.davi.homedavi.finance.domain.integration.SyncedLoan;
 import br.com.davi.homedavi.finance.domain.integration.SyncedTransaction;
 import br.com.davi.homedavi.finance.domain.integration.TransactionChanges;
 import br.com.davi.homedavi.finance.domain.finance.TransactionType;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
@@ -30,14 +38,59 @@ public class JpaFinanceDataRepository implements FinanceDataRepository {
   private final AccountJpaRepository accountRepository;
   private final TransactionJpaRepository transactionRepository;
   private final CategoryJpaRepository categoryRepository;
+  private final LoanJpaRepository loanRepository;
+  private final BillJpaRepository billRepository;
 
   public JpaFinanceDataRepository(
       AccountJpaRepository accountRepository,
       TransactionJpaRepository transactionRepository,
-      CategoryJpaRepository categoryRepository) {
+      CategoryJpaRepository categoryRepository,
+      LoanJpaRepository loanRepository,
+      BillJpaRepository billRepository) {
     this.accountRepository = accountRepository;
     this.transactionRepository = transactionRepository;
     this.categoryRepository = categoryRepository;
+    this.loanRepository = loanRepository;
+    this.billRepository = billRepository;
+  }
+
+  @Override
+  @Transactional
+  public List<UUID> saveAccounts(UUID itemId, List<SyncedAccount> accounts) {
+    var created = new ArrayList<UUID>();
+    for (var account : accounts) {
+      if (!accountRepository.existsById(account.id())) created.add(account.id());
+      saveAccount(itemId, account);
+    }
+    return created;
+  }
+
+  @Override
+  @Transactional
+  public void saveLoans(UUID itemId, List<SyncedLoan> loans) {
+    for (var loan : loans) {
+      var entity = loanRepository.findById(loan.id()).orElseGet(() -> new LoanEntity(loan.id(), itemId));
+      entity.setContractNumber(loan.contractNumber());
+      entity.setOutstandingBalance(loan.outstandingBalance());
+      entity.setCurrencyCode(loan.currencyCode());
+      entity.setRawData(loan.rawDataJson());
+      loanRepository.save(entity);
+    }
+  }
+
+  @Override
+  @Transactional
+  public void saveBills(List<SyncedBill> bills) {
+    for (var bill : bills) {
+      var entity =
+          billRepository.findById(bill.id()).orElseGet(() -> new BillEntity(bill.id(), bill.accountId()));
+      entity.setDueDate(bill.dueDate());
+      entity.setTotalAmount(bill.totalAmount());
+      entity.setMinimumPayment(bill.minimumPayment());
+      entity.setCurrencyCode(bill.currencyCode());
+      entity.setRawData(bill.rawDataJson());
+      billRepository.save(entity);
+    }
   }
 
   @Override
@@ -137,6 +190,8 @@ public class JpaFinanceDataRepository implements FinanceDataRepository {
     return switch (type) {
       case INCOME -> FinanceTransactionType.INCOME;
       case EXPENSE -> FinanceTransactionType.EXPENSE;
+      case TRANSFER -> FinanceTransactionType.TRANSFER;
+      case UNKNOWN -> FinanceTransactionType.UNKNOWN;
     };
   }
 }

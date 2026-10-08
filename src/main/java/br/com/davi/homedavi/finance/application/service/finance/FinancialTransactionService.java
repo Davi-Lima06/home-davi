@@ -41,6 +41,6 @@ public class FinancialTransactionService
 
   @Override
   public List<FinancialTransaction> listByAccount(String accountId) {
-    return repository.findByAccountId(accountId);
+    return repository.findAll();
   }
 }

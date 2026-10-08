@@ -3,11 +3,13 @@ package br.com.davi.homedavi.finance.application.service.integration;
 import br.com.davi.homedavi.finance.application.port.in.integration.ProcessPluggyWebhookUseCase;
 import br.com.davi.homedavi.finance.application.port.out.finance.FinanceDataRepository;
 import br.com.davi.homedavi.finance.application.port.out.integration.FinancialDataProvider;
+import br.com.davi.homedavi.finance.application.port.out.integration.FinancialQueryProvider;
 import br.com.davi.homedavi.finance.application.port.out.integration.HermesNotificationOutbox;
 import br.com.davi.homedavi.finance.application.port.out.integration.TransactionSyncLog;
 import br.com.davi.homedavi.finance.application.port.out.integration.WebhookEventQueue;
 import br.com.davi.homedavi.finance.domain.integration.HermesOutboxMessage;
 import br.com.davi.homedavi.finance.domain.integration.PluggyWebhookEvent;
+import br.com.davi.homedavi.finance.domain.integration.SyncedAccount;
 import br.com.davi.homedavi.finance.domain.integration.SyncedTransaction;
 import br.com.davi.homedavi.finance.domain.integration.TransactionChanges;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -31,6 +33,7 @@ public class PluggyWebhookProcessingService implements ProcessPluggyWebhookUseCa
 
   private final WebhookEventQueue eventQueue;
   private final FinancialDataProvider dataProvider;
+  private final FinancialQueryProvider queryProvider;
   private final FinanceDataRepository financeData;
   private final TransactionSyncLog syncLog;
   private final HermesNotificationOutbox hermesOutbox;
@@ -39,12 +42,14 @@ public class PluggyWebhookProcessingService implements ProcessPluggyWebhookUseCa
   public PluggyWebhookProcessingService(
       WebhookEventQueue eventQueue,
       FinancialDataProvider dataProvider,
+      FinancialQueryProvider queryProvider,
       FinanceDataRepository financeData,
       TransactionSyncLog syncLog,
       HermesNotificationOutbox hermesOutbox,
       ObjectMapper objectMapper) {
     this.eventQueue = eventQueue;
     this.dataProvider = dataProvider;
+    this.queryProvider = queryProvider;
     this.financeData = financeData;
     this.syncLog = syncLog;
     this.hermesOutbox = hermesOutbox;
@@ -67,6 +72,7 @@ public class PluggyWebhookProcessingService implements ProcessPluggyWebhookUseCa
     Long syncId =
         event.itemId() == null ? null : syncLog.startSync(event.eventId(), event.itemId());
     try {
+      int syncedAccounts = syncAccounts(event);
       var changes =
           switch (event.eventType()) {
             case "transactions/created" -> createdTransactions(event);
@@ -97,7 +103,7 @@ public class PluggyWebhookProcessingService implements ProcessPluggyWebhookUseCa
       log.info("[6/7] Pluggy webhook marked as processed: eventId={}", eventId);
       hermesOutbox.enqueue(
           new HermesOutboxMessage(
-              null, event.eventId(), event.eventType(), summary(event, changes), 0));
+              null, event.eventId(), event.eventType(), summary(event, changes, syncedAccounts), 0));
       log.info("[7/7] Financial summary stored in Hermes outbox: eventId={}", eventId);
       if (syncId != null) syncLog.completeSync(syncId);
     } catch (RuntimeException exception) {
@@ -110,6 +116,71 @@ public class PluggyWebhookProcessingService implements ProcessPluggyWebhookUseCa
       eventQueue.markFailed(eventId, error);
       if (syncId != null) syncLog.failSync(syncId, error);
     }
+  }
+
+  /**
+   * Ao receber um webhook com itemId, cria/atualiza as contas daquele item buscando-as na própria
+   * API da Pluggy (GET /accounts?itemId=). Vale para qualquer tipo de evento (inclusive item/*).
+   */
+  private int syncAccounts(PluggyWebhookEvent event) {
+    if (event.itemId() == null) {
+      log.info("[3/7] Webhook sem itemId; nenhuma conta para sincronizar: eventId={}", event.eventId());
+      return 0;
+    }
+    UUID itemId = event.itemId();
+    log.info("[3/7] Item presente; buscando contas na Pluggy: itemId={}", itemId);
+    var accounts = queryProvider.fetchAccounts(itemId);
+    var created = financeData.saveAccounts(itemId, accounts);
+    log.info(
+        "[3/7] Contas criadas/atualizadas: itemId={}, total={}, novas={}",
+        itemId,
+        accounts.size(),
+        created.size());
+    if (!created.isEmpty()) populateNewAccounts(itemId, accounts, created);
+    return accounts.size();
+  }
+
+  /**
+   * Quando uma conta é criada agora, popula o banco com empréstimos (por item), transações (v2, por
+   * conta) e faturas (por conta de cartão) daquele item/contas novas.
+   */
+  private void populateNewAccounts(UUID itemId, List<SyncedAccount> accounts, List<UUID> createdIds) {
+    log.info("[3/7] Contas novas detectadas; populando dados: itemId={}, novas={}", itemId, createdIds.size());
+
+    var loans = queryProvider.fetchLoans(itemId);
+    financeData.saveLoans(itemId, loans);
+    log.info("[3/7] Empréstimos persistidos: itemId={}, loans={}", itemId, loans.size());
+
+    for (var account : accounts) {
+      if (!createdIds.contains(account.id())) continue;
+
+      var transactions = fetchAllTransactions(account.id());
+      financeData.saveTransactionChanges(
+          new TransactionChanges(itemId, List.of(account), transactions, List.of()));
+      log.info(
+          "[3/7] Transações iniciais persistidas: accountId={}, transactions={}",
+          account.id(),
+          transactions.size());
+
+      if ("CREDIT".equalsIgnoreCase(account.type())) {
+        var bills = queryProvider.fetchBills(account.id());
+        financeData.saveBills(bills);
+        log.info("[3/7] Faturas persistidas: accountId={}, bills={}", account.id(), bills.size());
+      }
+    }
+  }
+
+  /** Percorre as páginas por cursor da API v2 de transações da conta. */
+  private List<SyncedTransaction> fetchAllTransactions(UUID accountId) {
+    var all = new ArrayList<SyncedTransaction>();
+    String cursor = null;
+    int page = 0;
+    do {
+      var current = queryProvider.fetchTransactionsPage(accountId, cursor, 500);
+      all.addAll(current.transactions());
+      cursor = current.nextCursor();
+    } while (cursor != null && !cursor.isBlank() && ++page < 100);
+    return all;
   }
 
   private TransactionChanges createdTransactions(PluggyWebhookEvent event) {
@@ -183,12 +254,13 @@ public class PluggyWebhookProcessingService implements ProcessPluggyWebhookUseCa
    * MCP/API do Home Davi. Assim a memória conversacional do agente não vira uma cópia do extrato
    * bancário.
    */
-  private String summary(PluggyWebhookEvent event, TransactionChanges changes) {
+  private String summary(PluggyWebhookEvent event, TransactionChanges changes, int syncedAccounts) {
     var summary = objectMapper.createObjectNode();
     summary.put("processedAt", Instant.now().toString());
     summary.put("itemId", event.itemId() == null ? null : event.itemId().toString());
     summary.put("accountId", event.accountId() == null ? null : event.accountId().toString());
     summary.put("triggeredBy", event.triggeredBy());
+    summary.put("accountsSynced", syncedAccounts);
     summary.put("accountsUpdated", changes == null ? 0 : changes.accounts().size());
     summary.put("transactionsUpserted", changes == null ? 0 : changes.transactions().size());
     summary.put(

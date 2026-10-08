@@ -194,9 +194,8 @@ public class PluggyApiClient implements FinancialDataProvider, FinancialQueryPro
                         .get()
                         .uri(
                                 uri -> {
-                                    uri.path("/v2/transactions")
-                                            .queryParam("accountId", accountId)
-                                            .queryParam("pageSize", pageSize);
+                                    // A API v2 não aceita pageSize (rejeita com 400); a paginação é só por cursor.
+                                    uri.path("/v2/transactions").queryParam("accountId", accountId);
                                     return cursor == null || cursor.isBlank()
                                             ? uri.build()
                                             : uri.queryParam("cursor", cursor).build();

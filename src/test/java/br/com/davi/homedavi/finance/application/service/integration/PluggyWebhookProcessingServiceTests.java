@@ -4,19 +4,27 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.davi.homedavi.finance.application.port.out.finance.FinanceDataRepository;
 import br.com.davi.homedavi.finance.application.port.out.integration.FinancialDataProvider;
+import br.com.davi.homedavi.finance.application.port.out.integration.FinancialQueryProvider;
 import br.com.davi.homedavi.finance.application.port.out.integration.HermesNotificationOutbox;
 import br.com.davi.homedavi.finance.application.port.out.integration.TransactionSyncLog;
 import br.com.davi.homedavi.finance.application.port.out.integration.WebhookEventQueue;
+import br.com.davi.homedavi.finance.domain.finance.TransactionType;
 import br.com.davi.homedavi.finance.domain.integration.HermesOutboxMessage;
 import br.com.davi.homedavi.finance.domain.integration.PluggyWebhookEvent;
 import br.com.davi.homedavi.finance.domain.integration.SyncedAccount;
+import br.com.davi.homedavi.finance.domain.integration.SyncedBill;
+import br.com.davi.homedavi.finance.domain.integration.SyncedInvestment;
+import br.com.davi.homedavi.finance.domain.integration.SyncedItem;
+import br.com.davi.homedavi.finance.domain.integration.SyncedLoan;
 import br.com.davi.homedavi.finance.domain.integration.SyncedTransaction;
 import br.com.davi.homedavi.finance.domain.integration.TransactionChanges;
-import br.com.davi.homedavi.finance.domain.finance.TransactionType;
+import br.com.davi.homedavi.finance.domain.integration.TransactionPage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,10 +41,62 @@ class PluggyWebhookProcessingServiceTests {
 
   private final FakeQueue queue = new FakeQueue();
   private final List<TransactionChanges> saved = new ArrayList<>();
+  private final List<SyncedAccount> syncedAccounts = new ArrayList<>();
+  private final List<SyncedLoan> savedLoans = new ArrayList<>();
+  private final List<SyncedBill> savedBills = new ArrayList<>();
+  private final Set<UUID> createOnSave = new HashSet<>();
+  private List<SyncedAccount> itemAccounts =
+      new ArrayList<>(List.of(account(ACCOUNT), account(UUID.randomUUID())));
   private final FakeSyncLog syncLog = new FakeSyncLog();
   private final FakeHermesOutbox hermesOutbox = new FakeHermesOutbox();
   private final List<Instant> requestedCreatedAtFrom = new ArrayList<>();
   private boolean providerDown;
+
+  @Test
+  void syncsItemAccountsOnAnyWebhookWithItemId() {
+    // item/updated: contas do item são atualizadas, mas como não são novas, nada é populado.
+    var event = queue.add("item/updated", null, "[]", "{}");
+
+    service().process(event.eventId());
+
+    assertEquals(2, syncedAccounts.size());
+    assertTrue(saved.isEmpty());
+    assertTrue(savedLoans.isEmpty());
+    assertTrue(savedBills.isEmpty());
+    assertTrue(queue.processed.contains(event.eventId()));
+    assertTrue(hermesOutbox.messages.getFirst().summaryJson().contains("accountsSynced"));
+  }
+
+  @Test
+  void populatesLoansTransactionsAndBillsWhenAccountIsNew() {
+    UUID cardAccount = UUID.randomUUID();
+    itemAccounts = new ArrayList<>(List.of(creditAccount(cardAccount)));
+    createOnSave.add(cardAccount); // a conta é criada agora
+    var event = queue.add("item/created", null, "[]", "{}");
+
+    service().process(event.eventId());
+
+    assertEquals(1, savedLoans.size(), "empréstimos do item devem ser persistidos");
+    assertEquals(1, saved.size(), "transações iniciais da conta nova devem ser persistidas");
+    assertEquals(cardAccount, saved.getFirst().accounts().getFirst().id());
+    assertEquals(1, saved.getFirst().transactions().size());
+    assertEquals(1, savedBills.size(), "fatura deve ser persistida para conta de cartão");
+    assertEquals(cardAccount, savedBills.getFirst().accountId());
+  }
+
+  @Test
+  void doesNotFetchBillsForNewNonCreditAccount() {
+    UUID bankAccount = UUID.randomUUID();
+    itemAccounts = new ArrayList<>(List.of(account(bankAccount)));
+    createOnSave.add(bankAccount);
+    var event = queue.add("item/created", null, "[]", "{}");
+
+    service().process(event.eventId());
+
+    assertEquals(1, savedLoans.size());
+    assertEquals(1, saved.size());
+    assertTrue(savedBills.isEmpty(), "conta não-cartão não deve consultar faturas");
+  }
 
   @Test
   void upsertsCreatedTransactionsFromPluggyAndMarksEventProcessed() {
@@ -94,6 +154,7 @@ class PluggyWebhookProcessingServiceTests {
     service().process(UUID.randomUUID());
 
     assertTrue(saved.isEmpty());
+    assertTrue(syncedAccounts.isEmpty());
     assertTrue(syncLog.outcomes.isEmpty());
     assertNull(queue.failed.get(ACCOUNT));
   }
@@ -104,18 +165,7 @@ class PluggyWebhookProcessingServiceTests {
           @Override
           public SyncedAccount fetchAccount(UUID accountId) {
             if (providerDown) throw new IllegalStateException("Pluggy unavailable");
-            return new SyncedAccount(
-                accountId,
-                "Conta",
-                "BANK",
-                "CHECKING_ACCOUNT",
-                null,
-                "BRL",
-                BigDecimal.TEN,
-                BigDecimal.TEN,
-                null,
-                null,
-                "{}");
+            return account(accountId);
           }
 
           @Override
@@ -131,8 +181,79 @@ class PluggyWebhookProcessingServiceTests {
             return List.of(transaction(UUID.randomUUID()));
           }
         };
+    FinancialQueryProvider queryProvider =
+        new FinancialQueryProvider() {
+          @Override
+          public List<SyncedAccount> fetchAccounts(UUID itemId) {
+            if (providerDown) throw new IllegalStateException("Pluggy unavailable");
+            return itemAccounts;
+          }
+
+          @Override
+          public TransactionPage fetchTransactionsPage(UUID accountId, String cursor, int pageSize) {
+            return new TransactionPage(List.of(transaction(UUID.randomUUID())), null);
+          }
+
+          @Override
+          public List<SyncedBill> fetchBills(UUID accountId) {
+            return List.of(
+                new SyncedBill(
+                    UUID.randomUUID(), accountId, LocalDate.parse("2026-11-10"),
+                    new BigDecimal("1200.00"), new BigDecimal("300.00"), "BRL", "{}"));
+          }
+
+          @Override
+          public List<SyncedItem> fetchItems() {
+            return List.of();
+          }
+
+          @Override
+          public List<SyncedInvestment> fetchInvestments(UUID itemId) {
+            return List.of();
+          }
+
+          @Override
+          public List<SyncedLoan> fetchLoans(UUID itemId) {
+            return List.of(new SyncedLoan(UUID.randomUUID(), "CT-1", new BigDecimal("2500.00"), "BRL", "{}"));
+          }
+        };
+    FinanceDataRepository financeData =
+        new FinanceDataRepository() {
+          @Override
+          public void saveTransactionChanges(TransactionChanges changes) {
+            saved.add(changes);
+          }
+
+          @Override
+          public List<UUID> saveAccounts(UUID itemId, List<SyncedAccount> accounts) {
+            syncedAccounts.addAll(accounts);
+            return accounts.stream().map(SyncedAccount::id).filter(createOnSave::contains).toList();
+          }
+
+          @Override
+          public void saveLoans(UUID itemId, List<SyncedLoan> loans) {
+            savedLoans.addAll(loans);
+          }
+
+          @Override
+          public void saveBills(List<SyncedBill> bills) {
+            savedBills.addAll(bills);
+          }
+        };
     return new PluggyWebhookProcessingService(
-        queue, provider, saved::add, syncLog, hermesOutbox, new ObjectMapper());
+        queue, provider, queryProvider, financeData, syncLog, hermesOutbox, new ObjectMapper());
+  }
+
+  private static SyncedAccount account(UUID id) {
+    return new SyncedAccount(
+        id, "Conta", "BANK", "CHECKING_ACCOUNT", null, "BRL", BigDecimal.TEN, BigDecimal.TEN, null,
+        null, "{}");
+  }
+
+  private static SyncedAccount creditAccount(UUID id) {
+    return new SyncedAccount(
+        id, "Cartão", "CREDIT", "CREDIT_CARD", null, "BRL", new BigDecimal("-100.00"), null,
+        new BigDecimal("5000.00"), "ACTIVE", "{}");
   }
 
   private static SyncedTransaction transaction(UUID id) {

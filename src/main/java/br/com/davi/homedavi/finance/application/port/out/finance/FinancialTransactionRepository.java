@@ -6,5 +6,5 @@ import java.util.List;
 public interface FinancialTransactionRepository {
   FinancialTransaction save(FinancialTransaction transaction);
 
-  List<FinancialTransaction> findByAccountId(String accountId);
+  List<FinancialTransaction> findAll();
 }
