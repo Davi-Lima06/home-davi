@@ -13,6 +13,15 @@ public interface TransactionJpaRepository extends JpaRepository<TransactionEntit
   @Query("SELECT t FROM TransactionEntity t WHERE t.account.id  IN :ids")
   List<TransactionEntity> findAllByIds(@Param("ids") List<UUID> ids);
 
+  @Query(
+      "SELECT t FROM TransactionEntity t WHERE upper(t.account.type) = upper(:type)"
+          + " AND t.occurredAt >= :from AND t.occurredAt < :toExclusive"
+          + " ORDER BY t.occurredAt DESC")
+  List<TransactionEntity> findByAccountTypeAndWindow(
+      @Param("type") String type,
+      @Param("from") java.time.Instant from,
+      @Param("toExclusive") java.time.Instant toExclusive);
+
   List<TransactionEntity> findByUpdatedAtAfterAndUpdatedAtBeforeOrderByUpdatedAtAsc(
       java.time.Instant after, java.time.Instant before);
 

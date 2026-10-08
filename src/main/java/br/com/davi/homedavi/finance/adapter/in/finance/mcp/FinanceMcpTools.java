@@ -6,8 +6,9 @@ import br.com.davi.homedavi.finance.application.port.in.finance.ListFinancialAcc
 import br.com.davi.homedavi.finance.application.port.in.finance.ListFinancialTransactionsUseCase;
 import br.com.davi.homedavi.finance.domain.finance.AccountBalance;
 import br.com.davi.homedavi.finance.domain.finance.FinancialAccount;
-import br.com.davi.homedavi.finance.domain.finance.FinancialTransaction;
 import br.com.davi.homedavi.finance.domain.finance.FinancialSnapshot;
+import br.com.davi.homedavi.finance.domain.finance.TransactionsByType;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -60,10 +61,28 @@ public class FinanceMcpTools {
     return listAccounts.listAccounts();
   }
 
-  @Tool(description = "Lista as transações financeiras de uma conta pelo identificador da conta.")
-  public List<FinancialTransaction> listTransactions(
-      @ToolParam(description = "Identificador da conta") String accountId) {
-    return listTransactions.listByAccount(accountId);
+  @Tool(
+      description =
+          "Lista as transações do banco por tipo de conta e período. type: 'credit' (cartão) ou"
+              + " 'bank' (pix); se nulo, retorna os dois separados. from/to no formato yyyy-MM-dd;"
+              + " se nulos, usa os últimos 30 dias. O retorno separa as transações em 'credit' e"
+              + " 'bank'.")
+  public TransactionsByType getTransactions(
+      @ToolParam(required = false, description = "Tipo da conta: 'credit' (cartão) ou 'bank' (pix); nulo = ambos")
+          String type,
+      @ToolParam(required = false, description = "Data inicial (yyyy-MM-dd); nulo = 30 dias atrás")
+          String from,
+      @ToolParam(required = false, description = "Data final (yyyy-MM-dd); nulo = hoje") String to) {
+    log.info("MCP tool getTransactions called: type={}, from={}, to={}", type, from, to);
+    return listTransactions.getTransactions(blankToNull(type), parseDate(from), parseDate(to));
+  }
+
+  private static String blankToNull(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
+  }
+
+  private static LocalDate parseDate(String value) {
+    return value == null || value.isBlank() ? null : LocalDate.parse(value.trim());
   }
 
   @Tool(

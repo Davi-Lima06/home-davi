@@ -8,12 +8,9 @@ import br.com.davi.homedavi.finance.adapter.out.finance.persistence.repository.T
 import br.com.davi.homedavi.finance.application.port.out.finance.FinancialTransactionRepository;
 import br.com.davi.homedavi.finance.domain.finance.FinancialTransaction;
 import br.com.davi.homedavi.finance.domain.finance.TransactionType;
+import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,19 +52,11 @@ public class JpaFinancialTransactionRepository implements FinancialTransactionRe
 
   @Override
   @Transactional(readOnly = true)
-  public List<FinancialTransaction> findAll() {
-    Map<String, List<UUID>> accountsData = accounts.findAll().stream()
-            .collect(Collectors.groupingBy(
-                    AccountEntity::getType,
-                    Collectors.mapping(AccountEntity::getId, Collectors.toList())
-            ));
-
-    if (accountsData.containsKey("CREDIT")) {
-      return transactions.findAllByIds(accountsData.get("CREDIT")).stream()
-              .map(JpaFinancialTransactionRepository::toDomain)
-              .toList();
-    }
-    return null;
+  public List<FinancialTransaction> findByAccountType(
+      String accountType, Instant fromInclusive, Instant toExclusive) {
+    return transactions.findByAccountTypeAndWindow(accountType, fromInclusive, toExclusive).stream()
+        .map(JpaFinancialTransactionRepository::toDomain)
+        .toList();
   }
 
   static FinancialTransaction toDomain(TransactionEntity entity) {

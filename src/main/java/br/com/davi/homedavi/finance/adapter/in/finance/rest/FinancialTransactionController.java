@@ -4,6 +4,7 @@ import br.com.davi.homedavi.finance.application.port.in.finance.ListFinancialTra
 import br.com.davi.homedavi.finance.application.port.in.finance.RegisterFinancialTransactionUseCase;
 import br.com.davi.homedavi.finance.domain.finance.FinancialTransaction;
 import br.com.davi.homedavi.finance.domain.finance.TransactionType;
+import br.com.davi.homedavi.finance.domain.finance.TransactionsByType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -11,8 +12,9 @@ import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.List;
+import java.time.LocalDate;
 
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -43,8 +45,11 @@ public class FinancialTransactionController {
     }
 
     @GetMapping
-    public List<FinancialTransaction> list(@RequestParam String accountId) {
-        return list.listByAccount(accountId);
+    public TransactionsByType list(
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return list.getTransactions(type, from, to);
     }
 
     public record CreateTransactionRequest(
