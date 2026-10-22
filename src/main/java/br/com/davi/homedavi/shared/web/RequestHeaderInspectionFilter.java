@@ -32,7 +32,7 @@ public class RequestHeaderInspectionFilter extends OncePerRequestFilter {
      */
     private static final Set<String> SENSITIVE_HEADERS = Set.of(
             "authorization", "cookie", "set-cookie", "x-api-key",
-            "x-webhook-signature", "x-webhook-signature-v2", "x-webhook-timestamp");
+            "x-webhook-secret", "x-webhook-signature", "x-webhook-signature-v2", "x-webhook-timestamp");
 
     private static String headerValue(String name, HttpServletRequest request) {
         if (SENSITIVE_HEADERS.contains(name.toLowerCase())) return "***";

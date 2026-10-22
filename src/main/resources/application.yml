@@ -50,6 +50,11 @@ hermes:
     secret: ${HERMES_WEBHOOK_SECRET:}
     poll-delay: ${HERMES_OUTBOX_POLL_DELAY:PT5S}
     batch-size: ${HERMES_OUTBOX_BATCH_SIZE:20}
+supabase:
+  webhook:
+    messages:
+      # Obrigatório para aceitar eventos da tabela public.logs_mensagens. Sem segredo, falha fechado.
+      secret: ${SUPABASE_MESSAGES_WEBHOOK_SECRET:}
 security:
   mcp-auth:
     # Sem token configurado, o endpoint MCP responde 503 (fail closed).
