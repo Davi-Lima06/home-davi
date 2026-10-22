@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class SupabaseMessageWebhookService implements ReceiveSupabaseMessageWebhookUseCase {
-  private static final String EXPECTED_SCHEMA = "public";
+  private static final String EXPECTED_SCHEMA = "notas_zap";
   private static final String EXPECTED_TABLE = "logs_mensagens";
   private static final int MAX_CONTENT_LENGTH = 10_000;
   private static final Pattern PHONE_PATTERN = Pattern.compile("^[0-9]{10,15}$");

@@ -26,7 +26,7 @@ Antes de iniciar a aplicação, aplique `deploy/postgres/migrations/005-datra-kn
 
 ### Mensagens do Supabase
 
-O endpoint `POST /api/v1/webhooks/supabase/messages` recebe apenas o envelope oficial de Database Webhooks para `public.logs_mensagens`. Ele exige o header `X-Webhook-Secret`, configurado também como `SUPABASE_MESSAGES_WEBHOOK_SECRET` no ambiente da aplicação, e aceita somente eventos `INSERT` ou `UPDATE`.
+O endpoint `POST /api/v1/webhooks/supabase/messages` recebe apenas o envelope oficial de Database Webhooks para `notas_zap.logs_mensagens`. Ele exige o header `X-Webhook-Secret`, configurado também como `SUPABASE_MESSAGES_WEBHOOK_SECRET` no ambiente da aplicação, e aceita somente eventos `INSERT` ou `UPDATE`.
 
 O `id` da mensagem no Supabase é a chave primária local em `datra.message_inbox`; reentregas são idempotentes e atualizações substituem os dados da mesma mensagem. A migração necessária é `deploy/postgres/migrations/006-datra-supabase-message-inbox.sql`.
 

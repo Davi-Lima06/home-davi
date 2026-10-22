@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** HTTP boundary for the Supabase Database Webhook configured on public.logs_mensagens. */
+/** HTTP boundary for the Supabase Database Webhook configured on notas_zap.logs_mensagens. */
 @RestController
 @RequestMapping("/api/v1/webhooks/supabase/messages")
 public class SupabaseMessageWebhookController {

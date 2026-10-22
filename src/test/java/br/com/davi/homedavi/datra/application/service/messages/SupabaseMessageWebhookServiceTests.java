@@ -44,7 +44,7 @@ class SupabaseMessageWebhookServiceTests {
     return objectMapper.readTree(
         """
         {
-          "type":"INSERT", "table":"logs_mensagens", "schema":"public",
+          "type":"INSERT", "table":"logs_mensagens", "schema":"notas_zap",
           "record":{"id":2,"telefone":"556192300340","direcao":"SAIDA",
           "conteudo":"Mensagem de teste","data_hora":"2026-07-31 18:32:01.866046+00"},
           "old_record":null
