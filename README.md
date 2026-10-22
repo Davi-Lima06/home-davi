@@ -12,6 +12,18 @@ Cada módulo funcional fica em `br.com.davi.homedavi.<modulo>` e contém `domain
 
 As integrações PostgreSQL ficam nos adapters JPA, preservando o domínio e os casos de uso independentes da infraestrutura.
 
+## Conhecimento Datra
+
+O módulo `datra` mantém uma base de conhecimento isolada no schema PostgreSQL `datra`.
+Documentos enviados pela API começam como `PENDING_APPROVAL`; somente após `POST /api/v1/datra/documents/{id}/approve` eles ficam disponíveis ao perfil Datra pelo MCP. Assim, rascunhos, conversas e conteúdo não revisado nunca são recuperados pela IA.
+
+* `POST /api/v1/datra/documents` — envia um documento para revisão;
+* `POST /api/v1/datra/documents/{id}/approve` — aprova o documento;
+* `GET /api/v1/datra/documents` — lista apenas documentos aprovados;
+* MCP: `searchDatraKnowledge`, `readDatraDocument`, `listApprovedDatraDocuments`.
+
+Antes de iniciar a aplicação, aplique `deploy/postgres/migrations/005-datra-knowledge-schema.sql` no banco `home_davi`.
+
 ## Executar
 
 ```bash
